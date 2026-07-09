@@ -34,64 +34,34 @@ struct PopoverContentView: View {
         VStack(spacing: 10) {
             qualityHeader
             nowPlayingCard
-            transferCard
             deviceCard
             footer
         }
     }
 
-    // MARK: Header
+    // MARK: Quality (source app's format + what's actually reaching the output, merged into one card)
 
     private var qualityHeader: some View {
         GlassCard(accent: state.qualityTier?.tint ?? Theme.Accent.quality) {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(title: "Quality", symbol: "waveform", accent: state.qualityTier?.tint ?? Theme.Accent.quality)
 
-                if let tier = state.qualityTier, let sr = state.sourceSampleRate, let bd = state.sourceBitDepth {
-                    HStack(spacing: 10) {
-                        Image(systemName: tier.symbolName)
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(tier.tint)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(tier.rawValue)
-                                .font(Theme.mono(15, weight: .bold))
-                            Text(String(format: "%.1f kHz / %d bit", sr / 1000, bd))
-                                .font(Theme.mono(12))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                } else if state.transport == .bluetooth, let codec = state.bluetoothCodec, let rate = state.bluetoothCodecSampleRate {
-                    HStack(spacing: 10) {
-                        Image(systemName: state.deviceCategory.symbolName)
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.blue)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(codec)
-                                .font(Theme.mono(15, weight: .bold))
-                            Text(String(format: "%.1f kHz (Bluetooth)", rate / 1000))
-                                .font(Theme.mono(12))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                } else if let sr = state.liveSampleRate {
-                    HStack(spacing: 10) {
-                        Image(systemName: "hifispeaker")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Device output")
-                                .font(Theme.mono(15, weight: .bold))
-                            Text(String(format: bitDepthFormat(state.liveBitDepth), sr / 1000, state.liveBitDepth ?? 0))
-                                .font(Theme.mono(12))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                } else {
+                let stages = state.qualityChainStages
+                if stages.isEmpty {
                     Text("No audio detected")
                         .font(Theme.mono(13))
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(stages.enumerated()), id: \.element.id) { index, stage in
+                            qualityChainRow(stage, isLast: index == stages.count - 1)
+                        }
+                    }
+                }
+
+                if state.transport == .bluetooth, state.bluetoothCodec == nil {
+                    Text("Waiting for codec negotiation…")
+                        .font(Theme.mono(10))
                         .foregroundStyle(.secondary)
                 }
 
@@ -109,8 +79,35 @@ struct PopoverContentView: View {
         }
     }
 
-    private func bitDepthFormat(_ bitDepth: Int?) -> String {
-        bitDepth != nil ? "%.1f kHz / %d bit" : "%.1f kHz"
+    // One stop in the Track -> This Mac -> Output chain, connected by a
+    // vertical line - same visual metaphor as Amazon Music's audio quality
+    // panel, built only from data we actually have (no fabricated stage).
+    private func qualityChainRow(_ stage: QualityChainStage, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(spacing: 0) {
+                Image(systemName: stage.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.Accent.quality)
+                    .frame(width: 22, height: 22)
+                    .background(Theme.Accent.quality.opacity(0.15), in: Circle())
+                if !isLast {
+                    Rectangle()
+                        .fill(Theme.Accent.quality.opacity(0.25))
+                        .frame(width: 1.5)
+                        .frame(minHeight: 14)
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(stage.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Text(stage.spec)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, isLast ? 0 : 10)
+            Spacer()
+        }
     }
 
     private func formattedRate(_ rate: Double?) -> String {
@@ -142,56 +139,6 @@ struct PopoverContentView: View {
         }
     }
 
-    // MARK: Transfer
-
-    private var transferCard: some View {
-        GlassCard(accent: Theme.Accent.transfer) {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(title: "Transfer", symbol: "arrow.up.arrow.down", accent: Theme.Accent.transfer)
-
-                if state.transport == .bluetooth {
-                    if let bitrate = state.transferBitrateKbps {
-                        HStack(spacing: 10) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundStyle(Theme.Accent.transfer)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(String(format: "~%.0f kbps", bitrate))
-                                    .font(Theme.mono(15, weight: .bold))
-                                Text("Negotiated Bluetooth link cap")
-                                    .font(Theme.mono(11))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                    } else {
-                        Text("Waiting for codec negotiation…")
-                            .font(Theme.mono(12))
-                            .foregroundStyle(.secondary)
-                    }
-                } else if let bitrate = state.transferBitrateKbps {
-                    HStack(spacing: 10) {
-                        Image(systemName: "waveform.path")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(Theme.Accent.transfer)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(String(format: "%.0f kbps", bitrate))
-                                .font(Theme.mono(15, weight: .bold))
-                            Text("Uncompressed PCM")
-                                .font(Theme.mono(11))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                } else {
-                    Text("No output stream detected")
-                        .font(Theme.mono(12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
     // MARK: Device
 
     private var deviceCard: some View {
@@ -214,14 +161,18 @@ struct PopoverContentView: View {
                 }
 
                 if state.transport == .wired {
-                    Toggle("Auto-match sample rate", isOn: Binding(
-                        get: { state.autoSwitchEnabled },
-                        set: { _ in onToggleAutoSwitch() }
-                    ))
-                    .font(Theme.mono(12))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity)
+                    HStack {
+                        Text("Auto-match sample rate")
+                            .font(Theme.mono(12))
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { state.autoSwitchEnabled },
+                            set: { _ in onToggleAutoSwitch() }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    }
                 }
 
                 if state.transport == .bluetooth {
