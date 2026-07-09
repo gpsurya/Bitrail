@@ -5,7 +5,7 @@ set -e
 
 APP_NAME="Bitrail"
 BUNDLE_ID="com.bitrail.app"
-VERSION="${VERSION:-0.3.0}"
+VERSION="${VERSION:-0.3.1}"
 ARCH=$(uname -m)
 BUILD_DIR="$(pwd)/build"
 APP="$BUILD_DIR/$APP_NAME.app"

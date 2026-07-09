@@ -19,6 +19,15 @@ final class AppCoordinator {
 
         nowPlaying.onTrackChanged = { [weak self] info in
             guard let self else { return }
+            // MediaController streams updates continuously (elapsed time, playback
+            // rate, etc.), not just on actual track changes - guard against
+            // rewriting identical values, which was flooding objectWillChange and
+            // causing the status bar/popover to visibly reflow every update.
+            let trackActuallyChanged = self.state.appName != info?.appName
+                || self.state.trackTitle != info?.title
+                || self.state.trackArtist != info?.artist
+            guard trackActuallyChanged else { return }
+
             self.state.appName = info?.appName
             self.state.trackTitle = info?.title
             self.state.trackArtist = info?.artist
@@ -41,8 +50,8 @@ final class AppCoordinator {
     }
 
     private func handleTrackChange() {
-        state.sourceSampleRate = nil
-        state.sourceBitDepth = nil
+        if state.sourceSampleRate != nil { state.sourceSampleRate = nil }
+        if state.sourceBitDepth != nil { state.sourceBitDepth = nil }
         if state.appName == "Music" {
             detectAppleMusicQuality()
         }
@@ -50,9 +59,10 @@ final class AppCoordinator {
 
     private func detectAppleMusicQuality() {
         guard let result = QualityDetector.detect() else { return }
-        state.sourceSampleRate = result.sampleRate
-        state.sourceBitDepth = result.bitDepth
-        state.sourceIsLossless = result.isLossless
+
+        if state.sourceSampleRate != result.sampleRate { state.sourceSampleRate = result.sampleRate }
+        if state.sourceBitDepth != result.bitDepth { state.sourceBitDepth = result.bitDepth }
+        if state.sourceIsLossless != result.isLossless { state.sourceIsLossless = result.isLossless }
 
         if state.autoSwitchEnabled, state.transport == .wired {
             outputMonitor.forceFormat(sampleRate: result.sampleRate, bitDepth: result.bitDepth)
@@ -61,21 +71,31 @@ final class AppCoordinator {
 
     private func detectBluetoothCodec() {
         guard let result = BluetoothCodecDetector.detect() else { return }
-        state.bluetoothCodec = result.codec
-        state.bluetoothCodecSampleRate = result.sampleRate
+        if state.bluetoothCodec != result.codec { state.bluetoothCodec = result.codec }
+        if state.bluetoothCodecSampleRate != result.sampleRate { state.bluetoothCodecSampleRate = result.sampleRate }
     }
 
+    // Every @Published write fires objectWillChange even when the new value
+    // equals the old one, which was re-triggering the status bar/popover
+    // render on every 2s poll tick and causing a visible resize "flicker".
+    // Only write when something actually changed.
     private func refreshDevice() {
         let previousDeviceName = state.deviceName
-        state.deviceName = outputMonitor.currentDevice?.name
-        state.transport = outputMonitor.transport
+        let newDeviceName = outputMonitor.currentDevice?.name
+        let newTransport = outputMonitor.transport
+        let deviceChanged = previousDeviceName != newDeviceName
+
+        if state.deviceName != newDeviceName { state.deviceName = newDeviceName }
+        if state.transport != newTransport { state.transport = newTransport }
+
         if let format = outputMonitor.liveFormat {
-            state.liveSampleRate = format.sampleRate
-            state.liveBitDepth = format.bitDepth
+            if state.liveSampleRate != format.sampleRate { state.liveSampleRate = format.sampleRate }
+            if state.liveBitDepth != format.bitDepth { state.liveBitDepth = format.bitDepth }
         }
 
         // Codec is renegotiated per-connection - drop the stale reading if the device changed.
-        if state.deviceName != previousDeviceName || state.transport != .bluetooth {
+        let shouldClearCodec = deviceChanged || newTransport != .bluetooth
+        if shouldClearCodec, state.bluetoothCodec != nil || state.bluetoothCodecSampleRate != nil {
             state.bluetoothCodec = nil
             state.bluetoothCodecSampleRate = nil
         }
