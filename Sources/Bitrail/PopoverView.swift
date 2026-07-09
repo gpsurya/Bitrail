@@ -35,7 +35,6 @@ struct PopoverContentView: View {
             qualityHeader
             nowPlayingCard
             transferCard
-            audioLevelCard
             deviceCard
             footer
         }
@@ -193,38 +192,6 @@ struct PopoverContentView: View {
                 Text("Source app's own encoding bitrate (e.g. Spotify's) isn't exposed by any public API - this is what's actually leaving the Mac.")
                     .font(Theme.mono(10))
                     .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    // MARK: Audio Level
-
-    private var audioLevelCard: some View {
-        GlassCard(accent: .yellow) {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(title: "Audio Level", symbol: "speaker.wave.3", accent: .yellow)
-
-                if let percent = state.outputVolumePercent {
-                    HStack(spacing: 10) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(.secondary.opacity(0.15))
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .leading, endPoint: .trailing))
-                                    .frame(width: geo.size.width * CGFloat(percent) / 100)
-                            }
-                        }
-                        .frame(height: 8)
-                        Text("\(percent)%")
-                            .font(Theme.mono(13, weight: .bold))
-                            .frame(width: 42, alignment: .trailing)
-                    }
-                } else {
-                    Text("Volume unavailable for this device")
-                        .font(Theme.mono(12))
-                        .foregroundStyle(.secondary)
-                }
             }
         }
     }

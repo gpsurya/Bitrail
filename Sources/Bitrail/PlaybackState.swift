@@ -34,15 +34,6 @@ final class PlaybackState: ObservableObject {
     @Published var bluetoothCodecSampleRate: Double?
     @Published var bluetoothBitrateKbps: Double?
 
-    // Output device volume, 0-1 scalar. Real metric (kAudioHardwareServiceDeviceProperty_VirtualMainVolume),
-    // not a fabricated/simulated level meter - there's no real-time peak/RMS
-    // API without an audio tap.
-    @Published var outputVolume: Float?
-
-    var outputVolumePercent: Int? {
-        outputVolume.map { Int(($0 * 100).rounded()) }
-    }
-
     // What's actually reaching the output device right now, in kbps.
     // Bluetooth: the negotiated codec's cap, parsed from bluetoothd's log.
     // Wired: exact PCM math (sampleRate * bitDepth * channels), not an estimate -
