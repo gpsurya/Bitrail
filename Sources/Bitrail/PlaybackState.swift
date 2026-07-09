@@ -5,14 +5,6 @@ enum Transport: String {
     case wired = "Wired"
     case bluetooth = "Bluetooth"
     case other = "Other"
-
-    var symbolName: String {
-        switch self {
-        case .wired: return "cable.connector"
-        case .bluetooth: return "airpodspro"
-        case .other: return "hifispeaker"
-        }
-    }
 }
 
 final class PlaybackState: ObservableObject {
@@ -55,6 +47,10 @@ final class PlaybackState: ObservableObject {
             let channels = 2.0
             return (sr * Double(bd) * channels) / 1000
         }
+    }
+
+    var deviceCategory: DeviceCategory {
+        DeviceCategory.classify(deviceName: deviceName, transport: transport)
     }
 
     var qualityTier: QualityTier? {

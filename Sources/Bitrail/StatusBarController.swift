@@ -51,7 +51,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private func render() {
         guard let button = statusItem.button else { return }
 
-        let symbolName = state.qualityTier?.symbolName ?? state.transport.symbolName
+        let symbolName = state.qualityTier?.symbolName ?? state.deviceCategory.symbolName
         if symbolName != lastRenderedSymbolName {
             lastRenderedSymbolName = symbolName
             button.image = statusBarSymbol
@@ -81,7 +81,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             name = tier.symbolName
             color = NSColor(tier.tint)
         } else {
-            name = state.transport.symbolName
+            name = state.deviceCategory.symbolName
             color = .secondaryLabelColor
         }
         let config = NSImage.SymbolConfiguration(paletteColors: [color])

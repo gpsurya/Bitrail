@@ -41,7 +41,7 @@ struct PopoverContentView: View {
                     }
                 } else if state.transport == .bluetooth, let codec = state.bluetoothCodec, let rate = state.bluetoothCodecSampleRate {
                     HStack(spacing: 10) {
-                        Image(systemName: "airpodspro")
+                        Image(systemName: state.deviceCategory.symbolName)
                             .font(.system(size: 24, weight: .medium))
                             .foregroundStyle(.blue)
                         VStack(alignment: .leading, spacing: 2) {
@@ -186,7 +186,7 @@ struct PopoverContentView: View {
                 SectionLabel(title: "Output Device", symbol: "speaker.wave.2")
 
                 HStack(spacing: 8) {
-                    Image(systemName: state.transport.symbolName)
+                    Image(systemName: state.deviceCategory.symbolName)
                         .foregroundStyle(.secondary)
                     Text(state.deviceName ?? "Unknown")
                         .font(.system(size: 13, weight: .medium))
