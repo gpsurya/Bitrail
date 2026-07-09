@@ -13,10 +13,21 @@ struct BluetoothCodecDetector {
         let bitrateKbps: Double? // negotiated cap, e.g. "VBR max: 256kbps" or "Bitpool: 42 (267 kbps)"
     }
 
-    static func detect(withinSeconds seconds: TimeInterval = 15) -> Result? {
+    // bluetoothd logs "A2DP configured" exactly once, at connection time - not
+    // periodically. A short lookback window means that log line ages out and
+    // is gone forever once more than `seconds` has passed since connection,
+    // even though the connection (and its negotiated codec) is still active.
+    // Default to a wide window so we can find the negotiation from earlier in
+    // the session, not just one that happened moments ago.
+    static func detect(withinSeconds seconds: TimeInterval = 6 * 60 * 60) -> Result? {
         guard let store = try? OSLogStore(scope: .system) else { return nil }
         let position = store.position(timeIntervalSinceEnd: -seconds)
         guard let entries = try? store.getEntries(at: position) else { return nil }
+
+        // Entries are chronological (oldest first) - keep the last match, since
+        // that's the most recent negotiation if the device reconnected more
+        // than once within the window.
+        var latest: Result?
 
         for entry in entries {
             guard let logEntry = entry as? OSLogEntryLog else { continue }
@@ -34,9 +45,9 @@ struct BluetoothCodecDetector {
             guard let rateKHz = Double(rateString.trimmingCharacters(in: .whitespaces)) else { continue }
 
             let normalizedCodec = codec.trimmingCharacters(in: .whitespaces).uppercased().contains("AAC") ? "AAC" : "SBC"
-            return Result(codec: normalizedCodec, sampleRate: rateKHz * 1000, bitrateKbps: bitrateKbps(in: message))
+            latest = Result(codec: normalizedCodec, sampleRate: rateKHz * 1000, bitrateKbps: bitrateKbps(in: message))
         }
-        return nil
+        return latest
     }
 
     // Handles both observed formats: "VBR max: 256kbps" and "Bitpool: 42 (267 kbps)".

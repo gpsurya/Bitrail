@@ -8,6 +8,14 @@ final class AppCoordinator {
     private var statusBar: StatusBarController?
     private var pollTimer: Timer?
 
+    // BluetoothCodecDetector scans a wide (hours-long) log window since the
+    // negotiation log line only appears once per connection, not
+    // periodically. That's expensive to run on every 2s poll tick forever if
+    // detection genuinely fails (e.g. unexpected log wording) - cap retries
+    // per connection instead of hammering the log store indefinitely.
+    private var bluetoothDetectionAttempts = 0
+    private let maxBluetoothDetectionAttempts = 5
+
     func start() {
         let bar = StatusBarController(state: state)
         bar.onToggleAutoSwitch = { [weak self] in self?.state.autoSwitchEnabled.toggle() }
@@ -43,7 +51,9 @@ final class AppCoordinator {
             if self.state.appName == "Music" {
                 self.detectAppleMusicQuality()
             }
-            if self.state.transport == .bluetooth, self.state.bluetoothCodec == nil {
+            if self.state.transport == .bluetooth, self.state.bluetoothCodec == nil,
+               self.bluetoothDetectionAttempts < self.maxBluetoothDetectionAttempts {
+                self.bluetoothDetectionAttempts += 1
                 self.detectBluetoothCodec()
             }
         }
@@ -100,6 +110,9 @@ final class AppCoordinator {
             state.bluetoothCodec = nil
             state.bluetoothCodecSampleRate = nil
             state.bluetoothBitrateKbps = nil
+        }
+        if deviceChanged {
+            bluetoothDetectionAttempts = 0
         }
     }
 }
