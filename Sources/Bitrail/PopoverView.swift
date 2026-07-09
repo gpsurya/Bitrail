@@ -225,6 +225,7 @@ struct PopoverContentView: View {
                     .font(Theme.mono(12))
                     .toggleStyle(.switch)
                     .controlSize(.small)
+                    .frame(maxWidth: .infinity)
                 }
 
                 if state.transport == .bluetooth {
