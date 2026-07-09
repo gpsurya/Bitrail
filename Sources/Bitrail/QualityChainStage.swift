@@ -8,6 +8,10 @@ struct QualityChainStage: Identifiable, Equatable {
     let icon: String
     let title: String
     let spec: String
+    // True only for the fallback "app name, quality unknown" stage - the
+    // view uses this to prefer the app's real icon (via AppIconProvider)
+    // over the generic SF Symbol, falling back to the symbol if unavailable.
+    var usesAppIcon: Bool = false
 }
 
 extension PlaybackState {
@@ -37,7 +41,8 @@ extension PlaybackState {
             stages.append(QualityChainStage(
                 icon: "music.note",
                 title: appName,
-                spec: "Source quality unknown"
+                spec: "Source quality unknown",
+                usesAppIcon: true
             ))
         }
 

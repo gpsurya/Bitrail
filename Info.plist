@@ -26,6 +26,8 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Bitrail reads the Mac's audio output to drive the Now Playing visualizer. No audio is recorded or saved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

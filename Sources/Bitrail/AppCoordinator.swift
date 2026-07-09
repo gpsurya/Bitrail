@@ -7,6 +7,7 @@ final class AppCoordinator {
     private let outputMonitor = OutputDeviceMonitor()
     private var statusBar: StatusBarController?
     private var pollTimer: Timer?
+    private let log = ActivityLog.shared
 
     // Both detectors scan the log store on every 2s poll tick, but the log
     // line each looks for only appears once (per Bluetooth connection, or per
@@ -22,11 +23,18 @@ final class AppCoordinator {
     func stop() {
         pollTimer?.invalidate()
         nowPlaying.stop()
+        log.log("Bitrail stopping - poll timer invalidated, now-playing listener stopped")
     }
 
     func start() {
+        log.log("Bitrail started")
+
         let bar = StatusBarController(state: state)
-        bar.onToggleAutoSwitch = { [weak self] in self?.state.autoSwitchEnabled.toggle() }
+        bar.onToggleAutoSwitch = { [weak self] in
+            guard let self else { return }
+            self.state.autoSwitchEnabled.toggle()
+            self.log.log("Auto-match sample rate toggled \(self.state.autoSwitchEnabled ? "ON" : "OFF")")
+        }
         bar.onQuit = { NSApp.terminate(nil) }
         statusBar = bar
 
@@ -45,8 +53,16 @@ final class AppCoordinator {
             guard trackActuallyChanged else { return }
 
             self.state.appName = info?.appName
+            self.state.appBundleIdentifier = info?.bundleIdentifier
             self.state.trackTitle = info?.title
             self.state.trackArtist = info?.artist
+
+            if let info {
+                self.log.log("Now playing changed: \(info.appName ?? "?") - \(info.title ?? "?") / \(info.artist ?? "?")")
+            } else {
+                self.log.log("Now playing cleared - nothing reported by MediaRemote")
+            }
+
             self.handleTrackChange()
         }
         nowPlaying.start()
@@ -60,11 +76,13 @@ final class AppCoordinator {
             if self.state.appName == KnownApp.appleMusic, self.state.sourceSampleRate == nil,
                self.appleMusicDetectionAttempts < self.maxAppleMusicDetectionAttempts {
                 self.appleMusicDetectionAttempts += 1
+                self.log.log("Polling for Apple Music quality (attempt \(self.appleMusicDetectionAttempts)/\(self.maxAppleMusicDetectionAttempts)): scanning com.apple.coreaudio log for ACAppleLosslessDecoder line")
                 self.detectAppleMusicQuality()
             }
             if self.state.transport == .bluetooth, self.state.bluetoothCodec == nil,
                self.bluetoothDetectionAttempts < self.maxBluetoothDetectionAttempts {
                 self.bluetoothDetectionAttempts += 1
+                self.log.log("Polling for Bluetooth codec (attempt \(self.bluetoothDetectionAttempts)/\(self.maxBluetoothDetectionAttempts)): scanning bluetoothd/bluetoothaudiod log for A2DP configured line")
                 self.detectBluetoothCodec()
             }
         }
@@ -80,18 +98,27 @@ final class AppCoordinator {
     }
 
     private func detectAppleMusicQuality() {
-        guard let result = QualityDetector.detect() else { return }
+        guard let result = QualityDetector.detect() else {
+            log.log("Apple Music quality: no matching log line found in the last 5s")
+            return
+        }
+        log.log("Apple Music quality: detected \(Int(result.bitDepth))-bit / \(Int(result.sampleRate / 1000))kHz")
 
         if state.sourceSampleRate != result.sampleRate { state.sourceSampleRate = result.sampleRate }
         if state.sourceBitDepth != result.bitDepth { state.sourceBitDepth = result.bitDepth }
 
         if state.autoSwitchEnabled, state.transport == .wired {
+            log.log("Auto-match: forcing output device to \(result.bitDepth)-bit / \(Int(result.sampleRate / 1000))kHz")
             outputMonitor.forceFormat(sampleRate: result.sampleRate, bitDepth: result.bitDepth)
         }
     }
 
     private func detectBluetoothCodec() {
-        guard let result = BluetoothCodecDetector.detect() else { return }
+        guard let result = BluetoothCodecDetector.detect() else {
+            log.log("Bluetooth codec: no matching log line found in the last 6h")
+            return
+        }
+        log.log("Bluetooth codec: detected \(result.codec) / \(Int(result.sampleRate / 1000))kHz" + (result.bitrateKbps.map { " @ ~\(Int($0))kbps" } ?? ""))
         if state.bluetoothCodec != result.codec { state.bluetoothCodec = result.codec }
         if state.bluetoothCodecSampleRate != result.sampleRate { state.bluetoothCodecSampleRate = result.sampleRate }
         if state.bluetoothBitrateKbps != result.bitrateKbps { state.bluetoothBitrateKbps = result.bitrateKbps }
@@ -106,6 +133,10 @@ final class AppCoordinator {
         let newDeviceName = outputMonitor.currentDevice?.name
         let newTransport = outputMonitor.transport
         let deviceChanged = previousDeviceName != newDeviceName
+
+        if deviceChanged {
+            log.log("Output device changed: \(previousDeviceName ?? "none") -> \(newDeviceName ?? "none") (\(newTransport.rawValue))")
+        }
 
         if state.deviceName != newDeviceName { state.deviceName = newDeviceName }
         if state.transport != newTransport { state.transport = newTransport }

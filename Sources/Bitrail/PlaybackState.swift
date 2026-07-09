@@ -17,6 +17,7 @@ enum KnownApp {
 final class PlaybackState: ObservableObject {
     // Now playing (any app)
     @Published var appName: String?
+    @Published var appBundleIdentifier: String?
     @Published var trackTitle: String?
     @Published var trackArtist: String?
 

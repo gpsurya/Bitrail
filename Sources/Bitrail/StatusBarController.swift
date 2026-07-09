@@ -8,6 +8,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private var cancellable: AnyCancellable?
     private let popover = NSPopover()
     private let hostingController: NSHostingController<PopoverContentView>
+    private let visibility = PopoverVisibility()
 
     // Cached against the last rendered values so we only touch the button/popover
     // when something actually displayed changes - AppKit visibly resizes/reflows
@@ -27,7 +28,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     init(state: PlaybackState) {
         self.state = state
         self.hostingController = NSHostingController(
-            rootView: PopoverContentView(state: state, onToggleAutoSwitch: {}, onQuit: {})
+            rootView: PopoverContentView(state: state, visibility: visibility, onToggleAutoSwitch: {}, onQuit: {})
         )
         super.init()
 
@@ -77,6 +78,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // it only re-renders whatever text/state actually differs.
         hostingController.rootView = PopoverContentView(
             state: state,
+            visibility: visibility,
             onToggleAutoSwitch: { [weak self] in self?.onToggleAutoSwitch?() },
             onQuit: { [weak self] in self?.onQuit?() }
         )
@@ -103,12 +105,14 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             closePopover()
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            visibility.isVisible = true
             installClickMonitors()
         }
     }
 
     private func closePopover() {
         popover.close()
+        visibility.isVisible = false
         removeClickMonitors()
     }
 
@@ -124,6 +128,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
+        // Covers .transient's automatic dismissal too (e.g. outside click
+        // routed through AppKit itself), which bypasses closePopover().
+        visibility.isVisible = false
         removeClickMonitors()
     }
 }

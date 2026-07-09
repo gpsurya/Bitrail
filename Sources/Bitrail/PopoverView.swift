@@ -2,12 +2,14 @@ import SwiftUI
 
 struct PopoverContentView: View {
     @ObservedObject var state: PlaybackState
+    @ObservedObject var visibility: PopoverVisibility
+    @ObservedObject private var activityLog = ActivityLog.shared
     let onToggleAutoSwitch: () -> Void
     let onQuit: () -> Void
 
     @State private var showingLogs = false
-    @State private var logEntries: [LogTailEntry] = []
-    @State private var isLoadingLogs = false
+    @State private var systemLogEntries: [LogTailEntry] = []
+    @State private var isLoadingSystemLog = false
 
     var body: some View {
         ZStack {
@@ -85,11 +87,17 @@ struct PopoverContentView: View {
     private func qualityChainRow(_ stage: QualityChainStage, isLast: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(spacing: 0) {
-                Image(systemName: stage.icon)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.Accent.quality)
-                    .frame(width: 22, height: 22)
-                    .background(Theme.Accent.quality.opacity(0.15), in: Circle())
+                if stage.usesAppIcon, let appIcon = AppIconProvider.icon(forBundleIdentifier: state.appBundleIdentifier) {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 22, height: 22)
+                } else {
+                    Image(systemName: stage.icon)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.Accent.quality)
+                        .frame(width: 22, height: 22)
+                        .background(Theme.Accent.quality.opacity(0.15), in: Circle())
+                }
                 if !isLast {
                     Rectangle()
                         .fill(Theme.Accent.quality.opacity(0.25))
@@ -100,13 +108,12 @@ struct PopoverContentView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(stage.title)
                     .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(stage.spec)
                     .font(Theme.mono(11))
                     .foregroundStyle(.secondary)
             }
             .padding(.bottom, isLast ? 0 : 10)
-            Spacer()
         }
     }
 
@@ -119,17 +126,13 @@ struct PopoverContentView: View {
 
     private var nowPlayingCard: some View {
         GlassCard(accent: Theme.Accent.nowPlaying) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(title: "Now Playing", symbol: "music.note", accent: Theme.Accent.nowPlaying)
-                if let app = state.appName {
-                    Text(app)
-                        .font(.system(size: 13, weight: .semibold))
-                    if let title = state.trackTitle {
-                        Text([title, state.trackArtist].compactMap { $0 }.joined(separator: " — "))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
+                if state.appName != nil, let title = state.trackTitle {
+                    Text([title, state.trackArtist].compactMap { $0 }.joined(separator: " — "))
+                        .font(.system(size: 13, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                    AudioVisualizerView(state: state, visibility: visibility)
                 } else {
                     Text("Nothing playing")
                         .font(Theme.mono(13))
@@ -146,18 +149,20 @@ struct PopoverContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(title: "Output Device", symbol: "speaker.wave.2", accent: Theme.Accent.device)
 
-                HStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
                     Image(systemName: state.deviceCategory.symbolName)
                         .foregroundStyle(Theme.Accent.device)
                     Text(state.deviceName ?? "Unknown")
                         .font(.system(size: 13, weight: .semibold))
-                    Spacer()
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
                     Text(state.transport.rawValue)
                         .font(Theme.mono(10, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Theme.Accent.device.opacity(0.15), in: Capsule())
+                        .fixedSize()
                 }
 
                 if state.transport == .wired {
@@ -184,7 +189,14 @@ struct PopoverContentView: View {
         }
     }
 
-    // MARK: Live Tail (log viewer)
+    // MARK: Live Tail (raw activity + raw system log, unfiltered)
+
+    private enum LiveTailMode: String, CaseIterable {
+        case activity = "Activity"
+        case systemLog = "System Log"
+    }
+
+    @State private var liveTailMode: LiveTailMode = .activity
 
     private var logStack: some View {
         VStack(spacing: 10) {
@@ -193,57 +205,91 @@ struct PopoverContentView: View {
                     HStack {
                         SectionLabel(title: "Live Tail", symbol: "terminal", accent: Theme.Accent.logs)
                         Spacer()
-                        if isLoadingLogs {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Button(action: loadLogs) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 11))
+                        if liveTailMode == .systemLog {
+                            if isLoadingSystemLog {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Button(action: loadSystemLog) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Theme.Accent.logs)
                             }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Theme.Accent.logs)
                         }
                     }
 
-                    Text("Raw log lines Bitrail's detectors matched - what it's actually listening to.")
-                        .font(Theme.mono(10))
-                        .foregroundStyle(.secondary)
+                    Picker("", selection: $liveTailMode) {
+                        ForEach(LiveTailMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: liveTailMode) { newValue in
+                        if newValue == .systemLog, systemLogEntries.isEmpty { loadSystemLog() }
+                    }
 
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 6) {
-                            if logEntries.isEmpty && !isLoadingLogs {
-                                Text("No matching log lines in the last 30 minutes.")
-                                    .font(Theme.mono(11))
-                                    .foregroundStyle(.secondary)
-                            }
-                            ForEach(logEntries) { entry in
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text("\(LogTailStore.formattedTimestamp(entry.date))  \(entry.process)")
-                                        .font(Theme.mono(9, weight: .semibold))
-                                        .foregroundStyle(Theme.Accent.logs)
-                                    Text(entry.message)
+                    if liveTailMode == .activity {
+                        Text("Every action Bitrail takes internally, unfiltered - not just curated highlights.")
+                            .font(Theme.mono(10))
+                            .foregroundStyle(.secondary)
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 5) {
+                                if activityLog.entries.isEmpty {
+                                    Text("No activity yet.")
+                                        .font(Theme.mono(11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                ForEach(activityLog.entries.reversed()) { entry in
+                                    Text("\(LogTailStore.formattedTimestamp(entry.date))  \(entry.message)")
                                         .font(Theme.mono(9))
                                         .foregroundStyle(.secondary)
-                                        .lineLimit(3)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                         }
+                        .frame(height: 220)
+                    } else {
+                        Text("Raw unified-log lines Bitrail's detectors matched.")
+                            .font(Theme.mono(10))
+                            .foregroundStyle(.secondary)
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                if systemLogEntries.isEmpty && !isLoadingSystemLog {
+                                    Text("No matching log lines in the last 30 minutes.")
+                                        .font(Theme.mono(11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                ForEach(systemLogEntries) { entry in
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text("\(LogTailStore.formattedTimestamp(entry.date))  \(entry.process)")
+                                            .font(Theme.mono(9, weight: .semibold))
+                                            .foregroundStyle(Theme.Accent.logs)
+                                        Text(entry.message)
+                                            .font(Theme.mono(9))
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(height: 220)
                     }
-                    .frame(height: 220)
                 }
             }
             footer
         }
-        .onAppear { if logEntries.isEmpty { loadLogs() } }
     }
 
-    private func loadLogs() {
-        isLoadingLogs = true
+    private func loadSystemLog() {
+        isLoadingSystemLog = true
         DispatchQueue.global(qos: .userInitiated).async {
             let entries = LogTailStore.fetchRecent()
             DispatchQueue.main.async {
-                logEntries = entries
-                isLoadingLogs = false
+                systemLogEntries = entries
+                isLoadingSystemLog = false
             }
         }
     }
@@ -271,7 +317,6 @@ struct PopoverContentView: View {
 
             Button(action: {
                 withAnimation { showingLogs.toggle() }
-                if showingLogs { loadLogs() }
             }) {
                 HStack(spacing: 3) {
                     Image(systemName: showingLogs ? "arrow.uturn.backward" : "terminal")
