@@ -12,10 +12,17 @@ struct QualityDetector {
         let isLossless: Bool
     }
 
+    // LosslessSwitcher (the proven reference implementation) uses
+    // OSLogStore.local() with an NSPredicate passed to the log daemon,
+    // rather than OSLogStore(scope: .system) filtered after the fact in
+    // Swift - letting the daemon do the filtering is both the precedented
+    // approach and far cheaper than enumerating every system log entry.
+    private static let predicate = NSPredicate(format: "subsystem = %@", "com.apple.coreaudio")
+
     static func detect(withinSeconds seconds: TimeInterval = 5) -> Result? {
-        guard let store = try? OSLogStore(scope: .system) else { return nil }
+        guard let store = try? OSLogStore.local() else { return nil }
         let position = store.position(timeIntervalSinceEnd: -seconds)
-        guard let entries = try? store.getEntries(at: position) else { return nil }
+        guard let entries = try? store.getEntries(with: [], at: position, matching: predicate) else { return nil }
 
         for entry in entries {
             guard let logEntry = entry as? OSLogEntryLog else { continue }

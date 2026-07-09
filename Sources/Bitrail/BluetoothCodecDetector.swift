@@ -13,6 +13,12 @@ struct BluetoothCodecDetector {
         let bitrateKbps: Double? // negotiated cap, e.g. "VBR max: 256kbps" or "Bitpool: 42 (267 kbps)"
     }
 
+    // LosslessSwitcher (the proven reference implementation) uses
+    // OSLogStore.local() with an NSPredicate passed to the log daemon rather
+    // than filtering in Swift after pulling every entry - critical here
+    // given our lookback window is hours wide, not seconds.
+    private static let predicate = NSPredicate(format: "process = %@ OR process = %@", "bluetoothd", "bluetoothaudiod")
+
     // bluetoothd logs "A2DP configured" exactly once, at connection time - not
     // periodically. A short lookback window means that log line ages out and
     // is gone forever once more than `seconds` has passed since connection,
@@ -20,9 +26,9 @@ struct BluetoothCodecDetector {
     // Default to a wide window so we can find the negotiation from earlier in
     // the session, not just one that happened moments ago.
     static func detect(withinSeconds seconds: TimeInterval = 6 * 60 * 60) -> Result? {
-        guard let store = try? OSLogStore(scope: .system) else { return nil }
+        guard let store = try? OSLogStore.local() else { return nil }
         let position = store.position(timeIntervalSinceEnd: -seconds)
-        guard let entries = try? store.getEntries(at: position) else { return nil }
+        guard let entries = try? store.getEntries(with: [], at: position, matching: predicate) else { return nil }
 
         // Entries are chronological (oldest first) - keep the last match, since
         // that's the most recent negotiation if the device reconnected more
@@ -31,7 +37,6 @@ struct BluetoothCodecDetector {
 
         for entry in entries {
             guard let logEntry = entry as? OSLogEntryLog else { continue }
-            guard logEntry.process == "bluetoothd" || logEntry.process == "bluetoothaudiod" else { continue }
 
             let message = logEntry.composedMessage
             guard message.contains("A2DP configured"), message.contains("Codec:") else { continue }
@@ -50,13 +55,15 @@ struct BluetoothCodecDetector {
         return latest
     }
 
-    // Handles both observed formats: "VBR max: 256kbps" and "Bitpool: 42 (267 kbps)".
-    // Takes the last "<number> kbps" occurrence in the line, since that's the
-    // actual negotiated rate rather than an earlier unrelated number.
-    private static func bitrateKbps(in message: String) -> Double? {
+    // Handles both observed formats: "VBR max: 256kbps" (no space) and
+    // "Bitpool: 42 (267 kbps)" (space before "kbps") - the space in the
+    // second form meant the previous digit-scan, which stopped at the first
+    // non-digit character, hit the space immediately and returned nothing
+    // for every SBC connection. Skip whitespace before scanning digits.
+    static func bitrateKbps(in message: String) -> Double? {
         guard let kbpsRange = message.range(of: "kbps", options: .backwards) else { return nil }
-        let prefix = message[..<kbpsRange.lowerBound]
-        let digits = prefix.reversed().prefix(while: { $0.isNumber || $0 == "." }).reversed()
+        let beforeKbps = message[..<kbpsRange.lowerBound].reversed().drop(while: { $0 == " " })
+        let digits = beforeKbps.prefix(while: { $0.isNumber || $0 == "." }).reversed()
         return Double(String(digits))
     }
 

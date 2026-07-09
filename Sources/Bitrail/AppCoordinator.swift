@@ -16,6 +16,11 @@ final class AppCoordinator {
     private var bluetoothDetectionAttempts = 0
     private let maxBluetoothDetectionAttempts = 5
 
+    func stop() {
+        pollTimer?.invalidate()
+        nowPlaying.stop()
+    }
+
     func start() {
         let bar = StatusBarController(state: state)
         bar.onToggleAutoSwitch = { [weak self] in self?.state.autoSwitchEnabled.toggle() }

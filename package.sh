@@ -4,7 +4,7 @@
 set -e
 
 APP_NAME="Bitrail"
-VERSION="${VERSION:-0.4.2}"
+VERSION="${VERSION:-0.5.0}"
 BUILD_DIR="$(pwd)/build"
 APP="$BUILD_DIR/$APP_NAME.app"
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
