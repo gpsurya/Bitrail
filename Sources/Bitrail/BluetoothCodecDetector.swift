@@ -10,6 +10,7 @@ struct BluetoothCodecDetector {
     struct Result {
         let codec: String // "AAC" or "SBC"
         let sampleRate: Double // Hz
+        let bitrateKbps: Double? // negotiated cap, e.g. "VBR max: 256kbps" or "Bitpool: 42 (267 kbps)"
     }
 
     static func detect(withinSeconds seconds: TimeInterval = 15) -> Result? {
@@ -33,9 +34,19 @@ struct BluetoothCodecDetector {
             guard let rateKHz = Double(rateString.trimmingCharacters(in: .whitespaces)) else { continue }
 
             let normalizedCodec = codec.trimmingCharacters(in: .whitespaces).uppercased().contains("AAC") ? "AAC" : "SBC"
-            return Result(codec: normalizedCodec, sampleRate: rateKHz * 1000)
+            return Result(codec: normalizedCodec, sampleRate: rateKHz * 1000, bitrateKbps: bitrateKbps(in: message))
         }
         return nil
+    }
+
+    // Handles both observed formats: "VBR max: 256kbps" and "Bitpool: 42 (267 kbps)".
+    // Takes the last "<number> kbps" occurrence in the line, since that's the
+    // actual negotiated rate rather than an earlier unrelated number.
+    private static func bitrateKbps(in message: String) -> Double? {
+        guard let kbpsRange = message.range(of: "kbps", options: .backwards) else { return nil }
+        let prefix = message[..<kbpsRange.lowerBound]
+        let digits = prefix.reversed().prefix(while: { $0.isNumber || $0 == "." }).reversed()
+        return Double(String(digits))
     }
 
     private static func substring(in text: String, between start: String, and end: String) -> String? {

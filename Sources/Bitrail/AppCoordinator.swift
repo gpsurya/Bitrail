@@ -73,6 +73,7 @@ final class AppCoordinator {
         guard let result = BluetoothCodecDetector.detect() else { return }
         if state.bluetoothCodec != result.codec { state.bluetoothCodec = result.codec }
         if state.bluetoothCodecSampleRate != result.sampleRate { state.bluetoothCodecSampleRate = result.sampleRate }
+        if state.bluetoothBitrateKbps != result.bitrateKbps { state.bluetoothBitrateKbps = result.bitrateKbps }
     }
 
     // Every @Published write fires objectWillChange even when the new value
@@ -95,9 +96,10 @@ final class AppCoordinator {
 
         // Codec is renegotiated per-connection - drop the stale reading if the device changed.
         let shouldClearCodec = deviceChanged || newTransport != .bluetooth
-        if shouldClearCodec, state.bluetoothCodec != nil || state.bluetoothCodecSampleRate != nil {
+        if shouldClearCodec, state.bluetoothCodec != nil || state.bluetoothCodecSampleRate != nil || state.bluetoothBitrateKbps != nil {
             state.bluetoothCodec = nil
             state.bluetoothCodecSampleRate = nil
+            state.bluetoothBitrateKbps = nil
         }
     }
 }

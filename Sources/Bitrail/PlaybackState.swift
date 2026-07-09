@@ -40,6 +40,22 @@ final class PlaybackState: ObservableObject {
     // Display-only: negotiated at connection time, cannot be forced.
     @Published var bluetoothCodec: String?
     @Published var bluetoothCodecSampleRate: Double?
+    @Published var bluetoothBitrateKbps: Double?
+
+    // What's actually reaching the output device right now, in kbps.
+    // Bluetooth: the negotiated codec's cap, parsed from bluetoothd's log.
+    // Wired: exact PCM math (sampleRate * bitDepth * channels), not an estimate -
+    // wired output is uncompressed, so this is the real transferred bitrate.
+    var transferBitrateKbps: Double? {
+        switch transport {
+        case .bluetooth:
+            return bluetoothBitrateKbps
+        case .wired, .other:
+            guard let sr = liveSampleRate, let bd = liveBitDepth else { return nil }
+            let channels = 2.0
+            return (sr * Double(bd) * channels) / 1000
+        }
+    }
 
     var qualityTier: QualityTier? {
         guard appName == "Music", let sr = sourceSampleRate, let bd = sourceBitDepth else { return nil }

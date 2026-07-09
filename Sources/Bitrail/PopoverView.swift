@@ -9,6 +9,7 @@ struct PopoverContentView: View {
         VStack(spacing: 10) {
             qualityHeader
             nowPlayingCard
+            transferCard
             deviceCard
             footer
         }
@@ -115,6 +116,64 @@ struct PopoverContentView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
+            }
+        }
+    }
+
+    // MARK: Transfer
+
+    // What's actually reaching the output device right now - the honest
+    // answer to "what's actually transferred to my headphones," as opposed
+    // to what the source app claims to be streaming (which no public API
+    // exposes for Spotify/browsers - only Apple Music's own log lines).
+    private var transferCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(title: "Transfer", symbol: "arrow.up.arrow.down")
+
+                if state.transport == .bluetooth {
+                    if let bitrate = state.transferBitrateKbps {
+                        HStack(spacing: 10) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(String(format: "~%.0f kbps", bitrate))
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("Negotiated Bluetooth link cap")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    } else {
+                        Text("Waiting for codec negotiation…")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let bitrate = state.transferBitrateKbps {
+                    HStack(spacing: 10) {
+                        Image(systemName: "waveform.path")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(String(format: "%.0f kbps", bitrate))
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("Uncompressed PCM (exact, not estimated)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                } else {
+                    Text("No output stream detected")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Source app's own encoding bitrate (e.g. Spotify's) isn't exposed by any public API - this is what's actually leaving the Mac.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
         }
     }
