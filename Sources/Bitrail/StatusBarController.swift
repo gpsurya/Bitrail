@@ -28,6 +28,23 @@ final class StatusBarController {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Device: \(state.deviceName ?? "Unknown") (\(state.transport.rawValue))", action: nil, keyEquivalent: "")
 
+        if state.transport == .bluetooth {
+            if let codec = state.bluetoothCodec, let rate = state.bluetoothCodecSampleRate {
+                menu.addItem(withTitle: String(format: "Codec: %@ @ %.1fkHz", codec, rate / 1000), action: nil, keyEquivalent: "")
+            } else {
+                menu.addItem(withTitle: "Codec: detecting…", action: nil, keyEquivalent: "")
+            }
+        }
+
+        if let sourceSampleRate = state.sourceSampleRate {
+            let detected = String(format: "Detected (source): %.1fkHz/%dbit", sourceSampleRate / 1000, state.sourceBitDepth ?? 0)
+            menu.addItem(withTitle: detected, action: nil, keyEquivalent: "")
+        }
+        if let liveSampleRate = state.liveSampleRate {
+            let actualTitle = state.hasRateMismatch ? "Actual (device): %.1fkHz ⚠︎ mismatch" : "Actual (device): %.1fkHz"
+            menu.addItem(withTitle: String(format: actualTitle, liveSampleRate / 1000), action: nil, keyEquivalent: "")
+        }
+
         if state.transport == .wired {
             let toggle = NSMenuItem(title: "Auto-match sample rate", action: #selector(toggleAutoSwitch), keyEquivalent: "")
             toggle.target = self

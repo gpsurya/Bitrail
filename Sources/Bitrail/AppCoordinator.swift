@@ -23,10 +23,15 @@ final class AppCoordinator {
         nowPlaying.start()
 
         // Apple Music doesn't push format changes, so poll while it's the active app.
+        // Bluetooth codec is negotiated once per connection, so poll less often.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.refreshDevice()
-            if self?.state.appName == "Music" {
-                self?.detectAppleMusicQuality()
+            guard let self else { return }
+            self.refreshDevice()
+            if self.state.appName == "Music" {
+                self.detectAppleMusicQuality()
+            }
+            if self.state.transport == .bluetooth, self.state.bluetoothCodec == nil {
+                self.detectBluetoothCodec()
             }
         }
     }
@@ -50,12 +55,25 @@ final class AppCoordinator {
         }
     }
 
+    private func detectBluetoothCodec() {
+        guard let result = BluetoothCodecDetector.detect() else { return }
+        state.bluetoothCodec = result.codec
+        state.bluetoothCodecSampleRate = result.sampleRate
+    }
+
     private func refreshDevice() {
+        let previousDeviceName = state.deviceName
         state.deviceName = outputMonitor.currentDevice?.name
         state.transport = outputMonitor.transport
         if let format = outputMonitor.liveFormat {
             state.liveSampleRate = format.sampleRate
             state.liveBitDepth = format.bitDepth
+        }
+
+        // Codec is renegotiated per-connection - drop the stale reading if the device changed.
+        if state.deviceName != previousDeviceName || state.transport != .bluetooth {
+            state.bluetoothCodec = nil
+            state.bluetoothCodecSampleRate = nil
         }
     }
 }
