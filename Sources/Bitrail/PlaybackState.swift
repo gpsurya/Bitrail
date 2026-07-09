@@ -7,6 +7,13 @@ enum Transport: String {
     case other = "Other"
 }
 
+// MediaRemote reports Apple Music's applicationName as "Music" - used in
+// several places to gate Apple-Music-only detection, so it's named once
+// here instead of repeated as a magic string that could drift out of sync.
+enum KnownApp {
+    static let appleMusic = "Music"
+}
+
 final class PlaybackState: ObservableObject {
     // Now playing (any app)
     @Published var appName: String?
@@ -24,7 +31,6 @@ final class PlaybackState: ObservableObject {
     // Only populated when appName == Apple Music and log scraping succeeded
     @Published var sourceSampleRate: Double?
     @Published var sourceBitDepth: Int?
-    @Published var sourceIsLossless: Bool = false
 
     @Published var autoSwitchEnabled: Bool = false
 
@@ -54,8 +60,8 @@ final class PlaybackState: ObservableObject {
     }
 
     var qualityTier: QualityTier? {
-        guard appName == "Music", let sr = sourceSampleRate, let bd = sourceBitDepth else { return nil }
-        return QualityTier.classify(sampleRate: sr, bitDepth: bd, sourceIsLossless: sourceIsLossless)
+        guard appName == KnownApp.appleMusic, let sr = sourceSampleRate, let bd = sourceBitDepth else { return nil }
+        return QualityTier.classify(sampleRate: sr, bitDepth: bd)
     }
 
     // True once we have both a detected source format and a live device format

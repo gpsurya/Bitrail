@@ -19,8 +19,18 @@ final class DeviceCategoryTests: XCTestCase {
     }
 
     func testBluetoothSpeaker() {
+        // Regression: "jbl" was previously listed as " jbl" (leading space),
+        // which never matches when JBL is the first word of the device name -
+        // exactly this case. Only matched by accident before, via "flip".
         XCTAssertEqual(DeviceCategory.classify(deviceName: "JBL Flip 6", transport: .bluetooth), .speaker)
         XCTAssertEqual(DeviceCategory.classify(deviceName: "HomePod mini", transport: .bluetooth), .speaker)
+        XCTAssertEqual(DeviceCategory.classify(deviceName: "My JBL Charge", transport: .bluetooth), .speaker)
+    }
+
+    func testGenericWordsAloneDontFalsePositiveAsSpeaker() {
+        // "flip" and "charge" alone (without "jbl") shouldn't misclassify an
+        // unrelated device that happens to contain those common words.
+        XCTAssertEqual(DeviceCategory.classify(deviceName: "My Charge 5 Watch Audio", transport: .bluetooth), .overEarHeadphones)
     }
 
     func testWiredDeviceIgnoresKeywords() {

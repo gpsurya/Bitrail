@@ -188,10 +188,6 @@ struct PopoverContentView: View {
                         .font(Theme.mono(12))
                         .foregroundStyle(.secondary)
                 }
-
-                Text("Source app's own encoding bitrate (e.g. Spotify's) isn't exposed by any public API - this is what's actually leaving the Mac.")
-                    .font(Theme.mono(10))
-                    .foregroundStyle(.secondary)
             }
         }
     }

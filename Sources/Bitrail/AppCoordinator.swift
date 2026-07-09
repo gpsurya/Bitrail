@@ -8,13 +8,16 @@ final class AppCoordinator {
     private var statusBar: StatusBarController?
     private var pollTimer: Timer?
 
-    // BluetoothCodecDetector scans a wide (hours-long) log window since the
-    // negotiation log line only appears once per connection, not
-    // periodically. That's expensive to run on every 2s poll tick forever if
-    // detection genuinely fails (e.g. unexpected log wording) - cap retries
-    // per connection instead of hammering the log store indefinitely.
+    // Both detectors scan the log store on every 2s poll tick, but the log
+    // line each looks for only appears once (per Bluetooth connection, or per
+    // Apple Music track change) - not periodically. Once it's been found, or
+    // once a bounded number of attempts have failed to find it, further
+    // polling is pure waste (the exact battery-drain pattern LosslessSwitcher
+    // users reported). Cap retries per event instead of polling forever.
     private var bluetoothDetectionAttempts = 0
     private let maxBluetoothDetectionAttempts = 5
+    private var appleMusicDetectionAttempts = 0
+    private let maxAppleMusicDetectionAttempts = 5
 
     func stop() {
         pollTimer?.invalidate()
@@ -48,12 +51,15 @@ final class AppCoordinator {
         }
         nowPlaying.start()
 
-        // Apple Music doesn't push format changes, so poll while it's the active app.
-        // Bluetooth codec is negotiated once per connection, so poll less often.
+        // Apple Music doesn't push format changes, so poll a bounded number of
+        // times after each track change (below) rather than forever.
+        // Bluetooth codec is negotiated once per connection, same idea.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.refreshDevice()
-            if self.state.appName == "Music" {
+            if self.state.appName == KnownApp.appleMusic, self.state.sourceSampleRate == nil,
+               self.appleMusicDetectionAttempts < self.maxAppleMusicDetectionAttempts {
+                self.appleMusicDetectionAttempts += 1
                 self.detectAppleMusicQuality()
             }
             if self.state.transport == .bluetooth, self.state.bluetoothCodec == nil,
@@ -67,7 +73,8 @@ final class AppCoordinator {
     private func handleTrackChange() {
         if state.sourceSampleRate != nil { state.sourceSampleRate = nil }
         if state.sourceBitDepth != nil { state.sourceBitDepth = nil }
-        if state.appName == "Music" {
+        appleMusicDetectionAttempts = 0
+        if state.appName == KnownApp.appleMusic {
             detectAppleMusicQuality()
         }
     }
@@ -77,7 +84,6 @@ final class AppCoordinator {
 
         if state.sourceSampleRate != result.sampleRate { state.sourceSampleRate = result.sampleRate }
         if state.sourceBitDepth != result.bitDepth { state.sourceBitDepth = result.bitDepth }
-        if state.sourceIsLossless != result.isLossless { state.sourceIsLossless = result.isLossless }
 
         if state.autoSwitchEnabled, state.transport == .wired {
             outputMonitor.forceFormat(sampleRate: result.sampleRate, bitDepth: result.bitDepth)

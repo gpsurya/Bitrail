@@ -22,13 +22,19 @@ final class PlaybackStateTests: XCTestCase {
         XCTAssertFalse(state.hasRateMismatch)
     }
 
-    func testBluetoothStatusTextShowsCodec() {
+    func testQualityTierOnlyAppliesToAppleMusic() {
         let state = PlaybackState()
-        state.transport = .bluetooth
-        state.appName = "Music"
-        state.bluetoothCodec = "AAC"
-        state.bluetoothCodecSampleRate = 48000
-        XCTAssertTrue(state.statusBarText.contains("AAC"))
-        XCTAssertTrue(state.statusBarText.contains("48.0kHz"))
+        state.appName = "Spotify"
+        state.sourceSampleRate = 96000
+        state.sourceBitDepth = 24
+        XCTAssertNil(state.qualityTier)
+    }
+
+    func testQualityTierForAppleMusic() {
+        let state = PlaybackState()
+        state.appName = KnownApp.appleMusic
+        state.sourceSampleRate = 96000
+        state.sourceBitDepth = 24
+        XCTAssertEqual(state.qualityTier, .hiRes)
     }
 }

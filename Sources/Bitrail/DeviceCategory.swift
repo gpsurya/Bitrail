@@ -22,8 +22,7 @@ enum DeviceCategory: Equatable {
         }
 
         let speakerKeywords = [
-            "speaker", "homepod", "soundlink", "boombox", "boom", "megaboom",
-            "soundcore", "sonos", " jbl", "harman", "ue boom", "flip", "charge"
+            "speaker", "homepod", "soundlink", "boom", "soundcore", "sonos", "jbl", "harman"
         ]
         if speakerKeywords.contains(where: { name.contains($0) }) {
             return .speaker

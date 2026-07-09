@@ -6,10 +6,12 @@ import OSLog
 // This is the same private, undocumented technique LosslessSwitcher uses -
 // there is no public API that exposes this.
 struct QualityDetector {
+    // Always lossless: the ACAppleLosslessDecoder.cpp log line, by definition,
+    // only ever fires while decoding a lossless (ALAC) stream. There's no
+    // code path here that could ever detect a lossy track.
     struct Result {
         let sampleRate: Double // Hz
         let bitDepth: Int
-        let isLossless: Bool
     }
 
     // LosslessSwitcher (the proven reference implementation) uses
@@ -37,7 +39,7 @@ struct QualityDetector {
 
             guard let sampleRate = Double(trimmedSampleRate), let bitDepth = Int(trimmedBitDepth) else { continue }
 
-            return Result(sampleRate: sampleRate, bitDepth: bitDepth, isLossless: true)
+            return Result(sampleRate: sampleRate, bitDepth: bitDepth)
         }
         return nil
     }
