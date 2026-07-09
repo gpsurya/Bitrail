@@ -177,7 +177,7 @@ struct PopoverContentView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(String(format: "%.0f kbps", bitrate))
                                 .font(Theme.mono(15, weight: .bold))
-                            Text("Uncompressed PCM (exact, not estimated)")
+                            Text("Uncompressed PCM")
                                 .font(Theme.mono(11))
                                 .foregroundStyle(.secondary)
                         }
