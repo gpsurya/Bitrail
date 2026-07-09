@@ -34,6 +34,15 @@ final class PlaybackState: ObservableObject {
     @Published var bluetoothCodecSampleRate: Double?
     @Published var bluetoothBitrateKbps: Double?
 
+    // Output device volume, 0-1 scalar. Real metric (kAudioHardwareServiceDeviceProperty_VirtualMainVolume),
+    // not a fabricated/simulated level meter - there's no real-time peak/RMS
+    // API without an audio tap.
+    @Published var outputVolume: Float?
+
+    var outputVolumePercent: Int? {
+        outputVolume.map { Int(($0 * 100).rounded()) }
+    }
+
     // What's actually reaching the output device right now, in kbps.
     // Bluetooth: the negotiated codec's cap, parsed from bluetoothd's log.
     // Wired: exact PCM math (sampleRate * bitDepth * channels), not an estimate -
@@ -65,24 +74,4 @@ final class PlaybackState: ObservableObject {
         return sourceSampleRate != liveSampleRate
     }
 
-    var statusBarText: String {
-        if transport == .bluetooth, let codec = bluetoothCodec, let rate = bluetoothCodecSampleRate {
-            let name = appName ?? "No source"
-            return String(format: "\u{1F535} %@ · %@ %.1fkHz", name, codec, rate / 1000)
-        }
-
-        let transportGlyph = transport == .bluetooth ? "\u{1F535}" : "\u{1F50C}"
-        if let tier = qualityTier, let sr = sourceSampleRate, let bd = sourceBitDepth {
-            let mismatch = hasRateMismatch ? " ⚠︎" : ""
-            return String(format: "%@ %@ %.1fkHz/%dbit%@", transportGlyph, tier.rawValue, sr / 1000, bd, mismatch)
-        }
-        if let sr = liveSampleRate {
-            let name = appName ?? "No source"
-            if let bd = liveBitDepth {
-                return String(format: "%@ %@ · %.1fkHz/%dbit", transportGlyph, name, sr / 1000, bd)
-            }
-            return String(format: "%@ %@ · %.1fkHz", transportGlyph, name, sr / 1000)
-        }
-        return "Bitrail"
-    }
 }

@@ -16,6 +16,14 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private var lastRenderedLabel: String?
     private var lastRenderedSymbolName: String?
 
+    // .transient should close the popover on any outside click, but that
+    // relies on AppKit correctly routing the click through our app first -
+    // a click landing in another app's window can beat that. A global
+    // monitor (which only sees clicks in OTHER apps, never our own) is a
+    // belt-and-suspenders guarantee without any risk of misfiring on our
+    // own popover's buttons.
+    private var globalClickMonitor: Any?
+
     init(state: PlaybackState) {
         self.state = state
         self.hostingController = NSHostingController(
@@ -106,9 +114,30 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     @objc private func togglePopover() {
         guard let button = statusItem.button else { return }
         if popover.isShown {
-            popover.close()
+            closePopover()
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            installClickMonitors()
         }
+    }
+
+    private func closePopover() {
+        popover.close()
+        removeClickMonitors()
+    }
+
+    private func installClickMonitors() {
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.closePopover()
+        }
+    }
+
+    private func removeClickMonitors() {
+        if let globalClickMonitor { NSEvent.removeMonitor(globalClickMonitor) }
+        globalClickMonitor = nil
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        removeClickMonitors()
     }
 }

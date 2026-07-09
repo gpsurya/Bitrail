@@ -109,6 +109,9 @@ final class AppCoordinator {
             if state.liveBitDepth != format.bitDepth { state.liveBitDepth = format.bitDepth }
         }
 
+        let newVolume = outputMonitor.outputVolume
+        if state.outputVolume != newVolume { state.outputVolume = newVolume }
+
         // Codec is renegotiated per-connection - drop the stale reading if the device changed.
         let shouldClearCodec = deviceChanged || newTransport != .bluetooth
         if shouldClearCodec, state.bluetoothCodec != nil || state.bluetoothCodecSampleRate != nil || state.bluetoothBitrateKbps != nil {

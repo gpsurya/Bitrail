@@ -42,6 +42,13 @@ final class OutputDeviceMonitor {
         return (rate, bitDepth.map(Int.init))
     }
 
+    // Real device output volume (0-1 scalar), not a signal level meter -
+    // there's no CoreAudio API for actual real-time peak/RMS metering
+    // without an audio tap, but this is an honest, always-available metric.
+    var outputVolume: Float? {
+        currentDevice?.virtualMainVolume(scope: .output)
+    }
+
     // Wired devices only - forces the DAC's physical format to the nearest
     // match for the given source sample rate / bit depth. Bluetooth devices
     // negotiate a fixed codec/rate at connection time and cannot be forced.
