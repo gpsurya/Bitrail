@@ -25,7 +25,7 @@ final class QualityChainStageTests: XCTestCase {
         XCTAssertEqual(stages[1].spec, "24-bit / 96 kHz")
     }
 
-    func testWiredWithoutAppleMusicShowsOneStage() {
+    func testWiredWithNothingPlayingShowsOneStage() {
         let state = PlaybackState()
         state.transport = .wired
         state.liveSampleRate = 48000
@@ -36,6 +36,26 @@ final class QualityChainStageTests: XCTestCase {
         XCTAssertEqual(stages.count, 1)
         XCTAssertEqual(stages[0].title, "MacBook Pro Speakers")
         XCTAssertEqual(stages[0].spec, "32-bit / 48 kHz")
+    }
+
+    // The common case: Spotify (or any non-Apple-Music app), wired output.
+    // Source quality genuinely isn't obtainable here, but the chain should
+    // still show 2 stages (app -> output) rather than collapsing to 1, since
+    // most people don't use Apple Music.
+    func testSpotifyWiredShowsAppAndOutputStages() {
+        let state = PlaybackState()
+        state.appName = "Spotify"
+        state.transport = .wired
+        state.liveSampleRate = 48000
+        state.liveBitDepth = 32
+        state.deviceName = "MacBook Pro Speakers"
+
+        let stages = state.qualityChainStages
+        XCTAssertEqual(stages.count, 2)
+        XCTAssertEqual(stages[0].title, "Spotify")
+        XCTAssertEqual(stages[0].spec, "Source quality unknown")
+        XCTAssertEqual(stages[1].title, "MacBook Pro Speakers")
+        XCTAssertEqual(stages[1].spec, "32-bit / 48 kHz")
     }
 
     func testBluetoothWithFullChainShowsThreeStages() {

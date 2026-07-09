@@ -12,7 +12,11 @@ struct QualityChainStage: Identifiable, Equatable {
 
 extension PlaybackState {
     // Builds the chain from whatever's actually known right now:
-    // - Track: only when Apple Music's source format was detected.
+    // - Track: Apple Music's source format when detected; otherwise just the
+    //   playing app's name with an honest "quality unknown" - most people use
+    //   Spotify/browsers, not Apple Music, and without this fallback they'd
+    //   never see a chain longer than one stage (source quality genuinely
+    //   isn't obtainable for anything but Apple Music).
     // - This Mac: only relevant for Bluetooth, where the Mac-side format can
     //   differ from what's actually negotiated over the air to the headphones.
     //   For wired, there's no separate negotiation step, so this stage would
@@ -28,6 +32,12 @@ extension PlaybackState {
                 icon: tier.symbolName,
                 title: tier.rawValue,
                 spec: String(format: "%d-bit / %.0f kHz", bd, sr / 1000)
+            ))
+        } else if let appName {
+            stages.append(QualityChainStage(
+                icon: "music.note",
+                title: appName,
+                spec: "Source quality unknown"
             ))
         }
 
