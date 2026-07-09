@@ -161,11 +161,24 @@ struct PopoverContentView: View {
 
     // MARK: Footer
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
+
+    private var repoURL: URL {
+        // Permalink to the release tag matching this build, so "what am I
+        // running" always resolves to the exact matching release notes.
+        URL(string: "https://github.com/gpsurya/Bitrail/releases/tag/v\(appVersion)")!
+    }
+
     private var footer: some View {
         HStack {
-            Text("Bitrail")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.tertiary)
+            Link(destination: repoURL) {
+                Text("Bitrail v\(appVersion)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
             Spacer()
             Button("Quit", action: onQuit)
                 .font(.system(size: 11))
