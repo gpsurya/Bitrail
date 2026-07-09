@@ -5,7 +5,7 @@ set -e
 
 APP_NAME="Bitrail"
 BUNDLE_ID="com.bitrail.app"
-VERSION="${VERSION:-0.2.0}"
+VERSION="${VERSION:-0.3.0}"
 ARCH=$(uname -m)
 BUILD_DIR="$(pwd)/build"
 APP="$BUILD_DIR/$APP_NAME.app"
@@ -23,9 +23,10 @@ mkdir -p "$APP/Contents/Resources"
 cp "$SPM_RELEASE_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 cp "$SPM_RELEASE_DIR"/*.dylib "$APP/Contents/MacOS/" 2>/dev/null || true
 
-# ── Info.plist ──
+# ── Info.plist + icon ──
 cp Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+[ -f AppIcon.icns ] && cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # ── Ad-hoc sign (before adding the resource bundle below - codesign rejects
 #    any loose item at the bundle root that isn't "Contents") ──

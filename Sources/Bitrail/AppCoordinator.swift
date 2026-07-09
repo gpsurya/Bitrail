@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 final class AppCoordinator {
     private let state = PlaybackState()
@@ -8,7 +9,10 @@ final class AppCoordinator {
     private var pollTimer: Timer?
 
     func start() {
-        statusBar = StatusBarController(state: state)
+        let bar = StatusBarController(state: state)
+        bar.onToggleAutoSwitch = { [weak self] in self?.state.autoSwitchEnabled.toggle() }
+        bar.onQuit = { NSApp.terminate(nil) }
+        statusBar = bar
 
         outputMonitor.onChange = { [weak self] in self?.refreshDevice() }
         refreshDevice()

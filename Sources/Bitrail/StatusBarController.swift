@@ -1,66 +1,88 @@
 import AppKit
+import SwiftUI
 import Combine
 
-final class StatusBarController {
+final class StatusBarController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let state: PlaybackState
     private var cancellable: AnyCancellable?
-    private let menu = NSMenu()
+    private let popover = NSPopover()
 
     init(state: PlaybackState) {
         self.state = state
-        statusItem.menu = menu
+        super.init()
+
+        popover.behavior = .transient
+        popover.delegate = self
+
+        if let button = statusItem.button {
+            button.imagePosition = .imageLeading
+            button.action = #selector(togglePopover)
+            button.target = self
+        }
+
         render()
         cancellable = state.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.render() }
         }
     }
 
+    var onToggleAutoSwitch: (() -> Void)?
+    var onQuit: (() -> Void)?
+
     private func render() {
-        statusItem.button?.title = state.statusBarText
+        guard let button = statusItem.button else { return }
+        button.image = statusBarSymbol
+        button.image?.isTemplate = false
+        button.title = statusBarLabel
+        button.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
 
-        menu.removeAllItems()
-        menu.addItem(withTitle: state.appName ?? "No app playing", action: nil, keyEquivalent: "")
-        if let title = state.trackTitle {
-            let subtitle = [title, state.trackArtist].compactMap { $0 }.joined(separator: " — ")
-            menu.addItem(withTitle: subtitle, action: nil, keyEquivalent: "")
-        }
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Device: \(state.deviceName ?? "Unknown") (\(state.transport.rawValue))", action: nil, keyEquivalent: "")
-
-        if state.transport == .bluetooth {
-            if let codec = state.bluetoothCodec, let rate = state.bluetoothCodecSampleRate {
-                menu.addItem(withTitle: String(format: "Codec: %@ @ %.1fkHz", codec, rate / 1000), action: nil, keyEquivalent: "")
-            } else {
-                menu.addItem(withTitle: "Codec: detecting…", action: nil, keyEquivalent: "")
-            }
-        }
-
-        if let sourceSampleRate = state.sourceSampleRate {
-            let detected = String(format: "Detected (source): %.1fkHz/%dbit", sourceSampleRate / 1000, state.sourceBitDepth ?? 0)
-            menu.addItem(withTitle: detected, action: nil, keyEquivalent: "")
-        }
-        if let liveSampleRate = state.liveSampleRate {
-            let actualTitle = state.hasRateMismatch ? "Actual (device): %.1fkHz ⚠︎ mismatch" : "Actual (device): %.1fkHz"
-            menu.addItem(withTitle: String(format: actualTitle, liveSampleRate / 1000), action: nil, keyEquivalent: "")
-        }
-
-        if state.transport == .wired {
-            let toggle = NSMenuItem(title: "Auto-match sample rate", action: #selector(toggleAutoSwitch), keyEquivalent: "")
-            toggle.target = self
-            toggle.state = state.autoSwitchEnabled ? .on : .off
-            menu.addItem(toggle)
-        }
-
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Quit Bitrail", action: #selector(quit), keyEquivalent: "q")
+        let hostingController = NSHostingController(
+            rootView: PopoverContentView(
+                state: state,
+                onToggleAutoSwitch: { [weak self] in self?.onToggleAutoSwitch?() },
+                onQuit: { [weak self] in self?.onQuit?() }
+            )
+        )
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hostingController
     }
 
-    @objc private func toggleAutoSwitch() {
-        state.autoSwitchEnabled.toggle()
+    private var statusBarSymbol: NSImage? {
+        let name: String
+        let color: NSColor
+        if let tier = state.qualityTier {
+            name = tier.symbolName
+            color = NSColor(tier.tint)
+        } else {
+            name = state.transport.symbolName
+            color = .secondaryLabelColor
+        }
+        let config = NSImage.SymbolConfiguration(paletteColors: [color])
+        return NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
     }
 
-    @objc private func quit() {
-        NSApp.terminate(nil)
+    private var statusBarLabel: String {
+        if let tier = state.qualityTier, let sr = state.sourceSampleRate, let bd = state.sourceBitDepth {
+            let mismatch = state.hasRateMismatch ? " !" : ""
+            return String(format: " %.0fkHz/%dbit%@", sr / 1000, bd, mismatch) + " \(tier == .hiRes ? "HiRes" : tier.rawValue)"
+        }
+        if state.transport == .bluetooth, let codec = state.bluetoothCodec, let rate = state.bluetoothCodecSampleRate {
+            return String(format: " %@ %.0fkHz", codec, rate / 1000)
+        }
+        if let sr = state.liveSampleRate {
+            return String(format: " %.0fkHz", sr / 1000)
+        }
+        return " Bitrail"
+    }
+
+    @objc private func togglePopover() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            popover.close()
+        } else {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
     }
 }

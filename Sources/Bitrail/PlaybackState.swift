@@ -5,6 +5,14 @@ enum Transport: String {
     case wired = "Wired"
     case bluetooth = "Bluetooth"
     case other = "Other"
+
+    var symbolName: String {
+        switch self {
+        case .wired: return "cable.connector"
+        case .bluetooth: return "airpodspro"
+        case .other: return "hifispeaker"
+        }
+    }
 }
 
 final class PlaybackState: ObservableObject {

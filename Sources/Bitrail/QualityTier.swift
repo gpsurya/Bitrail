@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum QualityTier: String {
     case lossy = "Lossy"
@@ -11,5 +12,21 @@ enum QualityTier: String {
             return .hiRes
         }
         return .lossless
+    }
+
+    var symbolName: String {
+        switch self {
+        case .lossy: return "waveform"
+        case .lossless: return "waveform.badge.checkmark"
+        case .hiRes: return "waveform.badge.plus"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .lossy: return .secondary
+        case .lossless: return .blue
+        case .hiRes: return .purple
+        }
     }
 }
